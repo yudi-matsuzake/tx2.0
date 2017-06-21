@@ -1,0 +1,6 @@
+{
+	"type" : "deposit",
+	"account_id" : 1,
+	"value" : 5.0,
+	"deposit_method" : "current"
+}
