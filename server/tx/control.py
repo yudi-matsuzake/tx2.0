@@ -12,7 +12,6 @@ session = tx.db.newsession()
 transaction_lock = threading.Lock()
 
 class ControlError(BaseException):
-
     def __init__(self, msg, code):
         self.msg = msg
         self.code = code
@@ -51,6 +50,17 @@ def get_client(cpf):
               .filter(tx.model.Client.cpf == cpf)\
               .one_or_none()
     return client
+
+def get_clients():
+    return session.query(tx.model.Client).all()
+
+def add_client(client):
+    session.add(client)
+    session.commit()
+
+def add_account(account):
+    session.add(account)
+    session.commit()
 
 ## Realize the withdraw of `value` in `account` using
  # the savings or the current account specified by `method`

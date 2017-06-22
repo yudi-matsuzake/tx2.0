@@ -3,13 +3,12 @@ import tx.db
 import tx.model
 import tx.control
 
-import sys
-
 import json
 
 tx.db.base.metadata.create_all(tx.db.engine)
 app = flask.Flask(__name__)
 
+# error handling
 @app.errorhandler(404)
 def not_found(error):
     return flask.make_response(
@@ -130,33 +129,5 @@ def deposit():
     except tx.control.ControlError as error:
         return txerror(error.msg, error.code)
 
-port_to_bank = {
-    8080 : 'Banco do Brasil',
-    8081 : 'Banco do Brasil',
-    8082 : 'Caixa Econômica Federal',
-    8083 : 'Bradesco',
-    8084 : 'Santander'
-}
-
-port_to_ip  = {
-    8080 : 'localhost',
-    8081 : 'localhost',
-    8082 : 'localhost',
-    8083 : 'localhost',
-    8084 : 'localhost'
-}
-
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('USAGE: %s <port>' % sys.argv[0])
-        sys.exit(1)
-
-    try:
-        port = int(sys.argv[1])
-        bank = port_to_bank[port]
-        print(bank)
-    except KeyError:
-        print('ERROR: Please input a valid branch port')
-        sys.exit(1)
-
-    app.run(debug=True, threaded=True, port=port)
+    app.run(debug=True, threaded=True, port=tx.db.port)

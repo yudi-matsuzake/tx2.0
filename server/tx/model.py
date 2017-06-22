@@ -1,6 +1,10 @@
 import tx.db as db
+import tx.control
 import sqlalchemy.orm
+import sqlalchemy.event
 import sqlalchemy as sql
+import random
+import nomes
 
 import threading
 
@@ -47,3 +51,30 @@ class Account(db.base):
             'balance'   : self.balance,
             'saving'    : self.saving
         }
+
+# populate
+def random_cpf():
+    cpf = str(random.randint(0, 999))
+    cpf += '.' + str(random.randint(0, 999))
+    cpf += '.' + str(random.randint(0, 999))
+    cpf += '-' + str(random.randint(0, 99))
+    return cpf
+
+@sql.event.listens_for(Client.__table__, 'after_create')
+def populate_client(*args, **kwargs):
+    for i in range(random.randint(5, 10)):
+        cpf  = random_cpf()
+        name = nomes.nome_aleatorio()
+        client = Client(cpf=cpf, name=name)
+        tx.control.add_client(client)
+
+@sql.event.listens_for(Account.__table__, 'after_create')
+def populate_client(*args, **kwargs):
+    for client in tx.control.get_clients():
+        for i in range(random.randint(1, 3)):
+            cpf = client.cpf
+            balance = float(random.randint(0, 10000000.0))/100.0
+            saving = float(random.randint(0, 100000000.0))/100.0
+            account = Account(client_cpf=cpf, balance=balance, saving=saving)
+            tx.control.add_account(account)
+
