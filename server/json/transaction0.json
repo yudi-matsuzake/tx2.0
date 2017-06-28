@@ -1,8 +1,9 @@
 {
 	"type" : "transaction",
-	"sender_id" : "0",
+	"sender_id" : "1",
 	"receiver_id" : "1",
-	"sender_method" : "saving",
+	"sender_method" : "current",
 	"receiver_method" : "current",
+	"receiver_branch" : 2,
 	"value" : 1.0
 }

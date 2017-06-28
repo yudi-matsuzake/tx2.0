@@ -1,6 +1,6 @@
 {
 	"type" : "withdraw",
-	"account_id" : 0,
+	"account_id" : 1,
 	"value" : 1.0,
 	"withdraw_method" : "current"
 }

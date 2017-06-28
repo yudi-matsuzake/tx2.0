@@ -3,13 +3,13 @@ import tx.db
 import tx.model
 import tx.control
 
-import sys
-
 import json
 
 tx.db.base.metadata.create_all(tx.db.engine)
+tx.db.acid.metadata.create_all(tx.db.acid_engine)
 app = flask.Flask(__name__)
 
+# error handling
 @app.errorhandler(404)
 def not_found(error):
     return flask.make_response(
@@ -65,7 +65,6 @@ def total_amount():
     amount = tx.control.total_amount()
 
     return flask.jsonify({ 'total_amount' : amount })
-
 
 @app.route('/clients/<string:cpf>', methods=['GET'])
 def clients(cpf):
@@ -130,33 +129,88 @@ def deposit():
     except tx.control.ControlError as error:
         return txerror(error.msg, error.code)
 
-port_to_bank = {
-    8080 : 'Banco do Brasil',
-    8081 : 'Banco do Brasil',
-    8082 : 'Caixa Econômica Federal',
-    8083 : 'Bradesco',
-    8084 : 'Santander'
-}
+# participant first_phase
+@app.route('/twophase', methods=['POST'])
+def first_phase():
+    transaction_request = tx.model.Transaction()
 
-port_to_ip  = {
-    8080 : 'localhost',
-    8081 : 'localhost',
-    8082 : 'localhost',
-    8083 : 'localhost',
-    8084 : 'localhost'
-}
+    if not transaction_request.__from_json__(flask.request.get_data()):
+        flask.abort(400)
+    try:
+        transaction = tx.control.participant_first_phase(transaction_request)
 
-if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('USAGE: %s <port>' % sys.argv[0])
-        sys.exit(1)
+        return flask.jsonify(txjson(transaction))
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+# participant second_phase
+@app.route('/twophase/<int:id>', methods=['PUT'])
+def second_phase(id):
+    try:
+        tx.control.participant_second_phase(id)
+        return "", 200
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+# abort transaction
+@app.route('/twophase/<int:id>', methods=['DELETE'])
+def abort_transaction(id):
+    try:
+        tx.control.abort_transaction(id)
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+# get transactions status
+@app.route('/twophase/<int:id>', methods=['GET'])
+def get_transaction(id):
+    try:
+        transaction = tx.control.get_transaction(id)
+        return flask.jsonify(txjson(transaction))
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+@app.route('/transaction', methods=['POST'])
+def transaction():
+    transaction_request = json.loads(flask.request.get_data())
+
+    if( not 'type' in transaction_request or
+        transaction_request['type'] != 'transaction' or
+        not 'sender_id' in transaction_request or
+        not 'receiver_id' in transaction_request or
+        not 'sender_method' in transaction_request or
+        not 'receiver_method' in transaction_request or
+        not 'receiver_branch' in transaction_request or
+        not 'value' in transaction_request):
+        flask.abort(400)
+
+    sender_id = transaction_request['sender_id']
+    receiver_id = transaction_request['receiver_id']
+    sender_method = transaction_request['sender_method']
+    receiver_method = transaction_request['receiver_method']
+    receiver_branch = transaction_request['receiver_branch']
+    value = transaction_request['value']
+
+    sender_account = tx.control.get_account(sender_id)
+
+    if sender_account == None:
+        return txerror('Cannot found account with number %d'
+                        % sender_id)
 
     try:
-        port = int(sys.argv[1])
-        bank = port_to_bank[port]
-        print(bank)
-    except KeyError:
-        print('ERROR: Please input a valid branch port')
-        sys.exit(1)
 
-    app.run(debug=True, threaded=True, port=port)
+        tx.control.transaction(
+                sender_account,
+                receiver_id,
+                sender_method,
+                receiver_method,
+                receiver_branch,
+                value)
+
+        return flask.make_response(flask.jsonify(
+                { 'status' : 'Accepted' }), 202 )
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+if __name__ == '__main__':
+    tx.control.restore()
+    app.run(debug=True, threaded=True, port=tx.db.port)
