@@ -28,6 +28,11 @@ TxClientView::TxClientView(QWidget *parent) :
 			if (this->user_cpf != ""){
 
 				try {
+					this->web_service->setPort(QInputDialog::getText(
+								   this, "Welcome!",
+								   "Input the branch id",
+								   QLineEdit::Normal,
+								   QString()).toInt()+8080);
 					this->c = this	->web_service
 							->getClient(this->user_cpf);
 
@@ -72,7 +77,7 @@ QTableWidgetItem* TxClientView::createTableItem(double value)
 
 void TxClientView::initializeTable(){
 
-	ui->tableAccounts->setColumnCount(5);
+	ui->tableAccounts->setColumnCount(4);
 	ui->tableAccounts->setRowCount(this->c.accounts.size());
 
 	QStringList headers;
@@ -103,15 +108,12 @@ void TxClientView::initializeTable(){
 			createTableItem(c.getId()));
 
 		ui->tableAccounts->setItem(row, 1,
-			createTableItem(c.getBranch_id()));
+			createTableItem(this->web_service->getPort()));
 
 		ui->tableAccounts->setItem(row, 2,
-			createTableItem(c.getBank_name()));
-
-		ui->tableAccounts->setItem(row, 3,
 			createTableItem(c.getBalance()));
 
-		ui->tableAccounts->setItem(row, 4,
+		ui->tableAccounts->setItem(row, 3,
 			createTableItem(c.getSaving()));
 
 		row++;
@@ -140,15 +142,12 @@ try{
 			createTableItem(c.getId()));
 
 		ui->tableAccounts->setItem(row, 1,
-			createTableItem(c.getBranch_id()));
+			createTableItem(this->web_service->getPort()));
 
 		ui->tableAccounts->setItem(row, 2,
-			createTableItem(c.getBank_name()));
-
-		ui->tableAccounts->setItem(row, 3,
 			createTableItem(c.getBalance()));
 
-		ui->tableAccounts->setItem(row, 4,
+		ui->tableAccounts->setItem(row, 3,
 			createTableItem(c.getSaving()));
 
 
@@ -171,12 +170,6 @@ try{
 		->item(ui->tableAccounts->currentRow(), 0)
 		->text().toInt();
 
-	int branch_id = ui->tableAccounts
-		->item(ui->tableAccounts->currentRow(), 1)
-		->text().toInt();
-
-	this->web_service->setPort(append808(branch_id));
-
 	double d = ui->lineDeposit->text().toDouble();
 	QString s = ui->comboDeposit->currentText().toLower();
 	Deposit dep(i, d, s);
@@ -196,12 +189,6 @@ try{
 		->item(ui->tableAccounts->currentRow(), 0)
 		->text().toInt();
 
-	int branch_id = ui->tableAccounts
-		->item(ui->tableAccounts->currentRow(), 1)
-		->text().toInt();
-
-	this->web_service->setPort(append808(branch_id));
-
 	double d = ui->lineWithdraw->text().toDouble();
 	QString s = ui->comboWithdraw->currentText().toLower();
 	Withdraw w(i, d, s);
@@ -220,12 +207,6 @@ try{
 		->tableAccounts
 		->item(ui->tableAccounts->currentRow(), 0)
 		->text().toInt();
-
-	int branch_id = ui->tableAccounts
-		->item(ui->tableAccounts->currentRow(), 1)
-		->text().toInt();
-
-	this->web_service->setPort(append808(branch_id));
 
 	int r_id = ui->lineReceiver->text().toInt();
 	QString s_m = ui->ComboSender->currentText().toLower();

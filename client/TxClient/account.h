@@ -13,9 +13,6 @@ public:
 	Account();
 	Account(const int& id,
 		const QString& client_cpf,
-		const int& branch_id,
-		const int& bank_id,
-		const QString& bank_name,
 		const double& balance,
 		const double& saving);
 
@@ -39,15 +36,6 @@ public:
 	QString getClient_cpf() const;
 	void setClient_cpf(const QString &value);
 
-	int getBranch_id() const;
-	void setBranch_id(int value);
-
-	int getBank_id() const;
-	void setBank_id(int value);
-
-	QString getBank_name() const;
-	void setBank_name(const QString &value);
-
 	double getBalance() const;
 
 	double getSaving() const;
@@ -57,9 +45,6 @@ private:
 	static const QString JSON_TYPE;
 	int id;
 	QString client_cpf;
-	int branch_id; 
-	int bank_id;   
-	QString bank_name; 
 	double balance;   
 	double saving;    
 };

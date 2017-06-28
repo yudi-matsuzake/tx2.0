@@ -24,7 +24,7 @@ bool Client::read(const QJsonObject &json){
 
 	QJsonArray JArray;
 	QJsonObject JAccount;
-	Account account(0, "", 0, 0, "", 0, 0);
+	Account account(0, "", 0, 0);
 	JArray = json["accounts"].toArray();
 
 	for(int i = 0; i < JArray.size(); i++){

@@ -93,6 +93,11 @@ void WebService::setPort(short value)
 	port = value;
 }
 
+short WebService::getPort() const
+{
+	return port;
+}
+
 std::string WebService::request(const std::string &path,
 	const std::string &method,
 	const std::string &data)

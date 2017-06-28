@@ -86,6 +86,8 @@ public:
 
 	void setPort(short value);
 	
+	short getPort() const;
+
 private:
 	std::string ip;
 	short port;
