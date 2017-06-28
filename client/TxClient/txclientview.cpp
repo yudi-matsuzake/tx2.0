@@ -95,7 +95,6 @@ void TxClientView::initializeTable(){
 
 	headers <<	tr("Account")
 		<<	tr("Branch ID")
-		<<	tr("Bank")
 		<<	tr("Balance")
 		<<	tr("Saving");
 
@@ -108,7 +107,7 @@ void TxClientView::initializeTable(){
 			createTableItem(c.getId()));
 
 		ui->tableAccounts->setItem(row, 1,
-			createTableItem(this->web_service->getPort()));
+			createTableItem(this->web_service->getPort()-8080));
 
 		ui->tableAccounts->setItem(row, 2,
 			createTableItem(c.getBalance()));
@@ -142,7 +141,7 @@ try{
 			createTableItem(c.getId()));
 
 		ui->tableAccounts->setItem(row, 1,
-			createTableItem(this->web_service->getPort()));
+			createTableItem(this->web_service->getPort()-8080));
 
 		ui->tableAccounts->setItem(row, 2,
 			createTableItem(c.getBalance()));
