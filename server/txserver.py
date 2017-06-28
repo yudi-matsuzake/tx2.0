@@ -6,6 +6,7 @@ import tx.control
 import json
 
 tx.db.base.metadata.create_all(tx.db.engine)
+tx.db.acid.metadata.create_all(tx.db.acid_engine)
 app = flask.Flask(__name__)
 
 # error handling
@@ -129,5 +130,72 @@ def deposit():
     except tx.control.ControlError as error:
         return txerror(error.msg, error.code)
 
+# participant first_phase
+@app.route('/twophase', methods=['POST'])
+def first_phase():
+    transaction_request = tx.model.Transaction()
+
+    if not transaction_request.__from_json__(flask.request.get_data()):
+        flask.abort(400)
+
+    try:
+        transaction = tx.control.first_phase(transaction_request)
+
+        return flask.jsonify(txjson(transaction))
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+# participant second_phase
+@app.route('/twophase/<int:id>', methods=['PUT'])
+def second_phase(id):
+    try:
+        tx.control.second_phase(id)
+        return "", 200
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+@app.route('/transaction', methods=['POST'])
+def transaction():
+    transaction_request = json.loads(flask.request.get_data())
+
+    if( not 'type' in transaction_request or
+        transaction_request['type'] != 'transaction' or
+        not 'sender_id' in transaction_request or
+        not 'receiver_id' in transaction_request or
+        not 'sender_method' in transaction_request or
+        not 'receiver_method' in transaction_request or
+        not 'receiver_branch' in transaction_request or
+        not 'value' in transaction_request):
+        flask.abort(400)
+
+    sender_id = transaction_request['sender_id']
+    receiver_id = transaction_request['receiver_id']
+    sender_method = transaction_request['sender_method']
+    receiver_method = transaction_request['receiver_method']
+    receiver_branch = transaction_request['receiver_branch']
+    value = transaction_request['value']
+
+    sender_account = tx.control.get_account(sender_id)
+
+    if sender_account == None:
+        return txerror('Cannot found account with number %d'
+                        % sender_id)
+
+    try:
+
+        tx.control.transaction(
+                sender_account,
+                receiver_id,
+                sender_method,
+                receiver_method,
+                receiver_branch,
+                value)
+
+        return flask.make_response(flask.jsonify(
+                { 'status' : 'Accepted' }), 202 )
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
 if __name__ == '__main__':
+    print('port: ', tx.db.port)
     app.run(debug=True, threaded=True, port=tx.db.port)
