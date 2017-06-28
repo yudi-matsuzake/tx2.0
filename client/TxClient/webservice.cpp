@@ -88,6 +88,11 @@ QString WebService::transaction(const Transaction &t){
 	return response["status"].toString();
 }
 
+void WebService::setPort(short value)
+{
+	port = value;
+}
+
 std::string WebService::request(const std::string &path,
 	const std::string &method,
 	const std::string &data)

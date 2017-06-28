@@ -84,6 +84,8 @@ public:
 
 	QString transaction(const Transaction& t);
 
+	void setPort(short value);
+	
 private:
 	std::string ip;
 	short port;

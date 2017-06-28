@@ -14,7 +14,8 @@ public:
 		    const int& receiver_id,
 		    const QString& sender_method,
 		    const QString& receiver_method,
-		    const double& value);
+		    const double& value,
+		    const int &receiver_branch);
 
 	/**
 	 * @brief Function to atualize Transaction class based on a Json
@@ -34,6 +35,7 @@ private:
 	static const QString JSON_TYPE;
 	int sender_id;
 	int receiver_id;
+	int receiver_branch;
 	QString sender_method;
 	QString receiver_method;
 	double value;
