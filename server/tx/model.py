@@ -45,9 +45,9 @@ class Account(db.base):
 
     lock = threading.Lock()
 
-    # @sql.orm.reconstructor
-    # def create_lock(self):
-    #     self.lock = threading.Lock()
+    @sql.orm.reconstructor
+    def create_lock(self):
+        self.lock_account = threading.Lock()
 
     def __json__(self):
         return {

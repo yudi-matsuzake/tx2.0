@@ -280,8 +280,8 @@ def same_branch_transaction(sender, receiver, sender_method, receiver_method, va
     # global lock
     with transaction_lock:
         # object locks
-        sender.lock.acquire()
-        receiver.lock.acquire()
+        sender.lock_account.acquire()
+        receiver.lock_account.acquire()
 
     sender_amount = getattr(sender, sender_method)
 
@@ -296,8 +296,8 @@ def same_branch_transaction(sender, receiver, sender_method, receiver_method, va
 
     session.commit()
 
-    sender.lock.release()
-    receiver.lock.release()
+    sender.lock_account.release()
+    receiver.lock_account.release()
 
 ## Realize a transaction from `sender` to `receiver` of value `value`
  # from the coordinator perspective
@@ -320,11 +320,11 @@ def transaction(
         raise ControlError(
                 'The transaction method must be saving or current', 400)
 
-    if receiver_method == sender_method and sender.id == receiver_id:
-        raise ControlError(
-                'The sender and the receiver of a transaction '
-                'with the same type (%s) '
-                'must be different!' % receiver_method, 400)
+    # if receiver_method == sender_method and sender.id == receiver_id:
+    #     raise ControlError(
+    #             'The sender and the receiver of a transaction '
+    #             'with the same type (%s) '
+    #             'must be different!' % receiver_method, 400)
 
     if sender_method == 'current':
         sender_method = 'balance'
