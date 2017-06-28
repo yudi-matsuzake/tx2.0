@@ -51,6 +51,10 @@ TxClientView::TxClientView(QWidget *parent) :
 	this->initializeComboBoxes();
 }
 
+int append808(int x){
+	return 8080 + x;
+}
+
 QTableWidgetItem* TxClientView::createTableItem(const QString &value)
 {
 	return new QTableWidgetItem(value);
@@ -166,6 +170,13 @@ try{
 	int i = ui->tableAccounts
 		->item(ui->tableAccounts->currentRow(), 0)
 		->text().toInt();
+
+	int branch_id = ui->tableAccounts
+		->item(ui->tableAccounts->currentRow(), 1)
+		->text().toInt();
+
+	this->web_service->setPort(append808(branch_id));
+
 	double d = ui->lineDeposit->text().toDouble();
 	QString s = ui->comboDeposit->currentText().toLower();
 	Deposit dep(i, d, s);
@@ -184,6 +195,12 @@ try{
 	int i = ui->tableAccounts
 		->item(ui->tableAccounts->currentRow(), 0)
 		->text().toInt();
+
+	int branch_id = ui->tableAccounts
+		->item(ui->tableAccounts->currentRow(), 1)
+		->text().toInt();
+
+	this->web_service->setPort(append808(branch_id));
 
 	double d = ui->lineWithdraw->text().toDouble();
 	QString s = ui->comboWithdraw->currentText().toLower();
@@ -204,11 +221,18 @@ try{
 		->item(ui->tableAccounts->currentRow(), 0)
 		->text().toInt();
 
+	int branch_id = ui->tableAccounts
+		->item(ui->tableAccounts->currentRow(), 1)
+		->text().toInt();
+
+	this->web_service->setPort(append808(branch_id));
+
 	int r_id = ui->lineReceiver->text().toInt();
 	QString s_m = ui->ComboSender->currentText().toLower();
 	QString r_m = ui->comboReceiver->currentText().toLower();
 	double v = ui->lineTransaction->text().toDouble();
-	Transaction t(s_id, r_id, s_m, r_m, v);
+	int b_id = ui->lineBranch->text().toInt();
+	Transaction t(s_id, r_id, s_m, r_m, v, b_id);
 
 	QString r = this->web_service->transaction(t);
 	QMessageBox::information(this, "Result", r, QMessageBox::Ok);

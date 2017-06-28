@@ -11,13 +11,15 @@ Transaction::Transaction(const int &sender_id,
 			 const int &receiver_id,
 			 const QString &sender_method,
 			 const QString &receiver_method,
-			 const double &value){
+			 const double &value,
+			 const int &receiver_branch){
 
 	this->sender_id = sender_id;
 	this->receiver_id = receiver_id;
 	this->sender_method = sender_method;
 	this->receiver_method = receiver_method;
 	this->value = value;
+	this->receiver_branch = receiver_branch;
 }
 
 bool Transaction::read(const QJsonObject &json){
@@ -28,6 +30,7 @@ bool Transaction::read(const QJsonObject &json){
 	this->receiver_id = json["receiver_id"].toInt();
 	this->value = json["value"].toDouble();
 	this->sender_method = json["sender_method"].toString();
+	this->receiver_branch = json["receiver_branch"].toInt();
 	this->receiver_method = json["receiver_method"].toString();
 	return true;
 }
@@ -40,6 +43,7 @@ bool Transaction::write(QJsonObject &json) const{
 	json["receiver_id"] = this->receiver_id;
 	json["value"] = this->value;
 	json["sender_method"] = this->sender_method;
+	json["receiver_branch"] = this->receiver_branch;
 	json["receiver_method"] = this->receiver_method;
 	return true;
 }
