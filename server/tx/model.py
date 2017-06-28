@@ -78,6 +78,8 @@ class Transaction(db.acid):
         return {
             'type'            : self.__tablename__,
             'id'              : self.id,
+            'cordinator_tx'   : self.cordinator_tx,
+            'participant_tx'  : self.participant_tx,
             'sender_id'       : self.sender_id,
             'receiver_id'     : self.receiver_id,
             'sender_branch'   : self.sender_branch,
@@ -89,11 +91,12 @@ class Transaction(db.acid):
         }
 
     def __from_json__(self, data):
-        print('type: ', type(data))
         j = json.loads(data)
 
         keys = [ 'type',
                  'id',
+                 'cordinator_tx',
+                 'participant_tx',
                  'sender_id',
                  'receiver_id',
                  'sender_branch',

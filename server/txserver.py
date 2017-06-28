@@ -66,7 +66,6 @@ def total_amount():
 
     return flask.jsonify({ 'total_amount' : amount })
 
-
 @app.route('/clients/<string:cpf>', methods=['GET'])
 def clients(cpf):
     client = tx.control.get_client(cpf)
@@ -137,7 +136,6 @@ def first_phase():
 
     if not transaction_request.__from_json__(flask.request.get_data()):
         flask.abort(400)
-
     try:
         transaction = tx.control.first_phase(transaction_request)
 
@@ -151,6 +149,14 @@ def second_phase(id):
     try:
         tx.control.second_phase(id)
         return "", 200
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+# abort transaction
+@app.route('/twophase/<int:id>', methods=['DELETE'])
+def abort_transaction(id):
+    try:
+        tx.control.abort_transaction(id)
     except tx.control.ControlError as error:
         return txerror(error.msg, error.code)
 

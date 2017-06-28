@@ -160,6 +160,11 @@ def same_branch_transaction(sender, receiver, sender_method, receiver_method, va
     sender.lock.release()
     receiver.lock.release()
 
+def abort_transaction(id):
+    t = get_transaction(id)
+    t.status = 'aborted'
+    acid_session.commit()
+
 ## two phase transaction
 def coordinate_twophase_transaction(
         sender,
@@ -168,27 +173,28 @@ def coordinate_twophase_transaction(
         receiver_method,
         receiver_branch,
         value):
-    try:
-        with sender.lock:
-            sender_amount = getattr(sender, sender_method)
 
-            if sender_amount < value:
-                raise ControlError(
-                        'The account %d does not have the money to transact'
-                        % sender.id, 400)
+    with sender.lock:
+        sender_amount = getattr(sender, sender_method)
 
-            # populate transaction model
-            t = tx.model.Transaction(
-                    sender_id = sender.id,
-                    receiver_id = receiver_id,
-                    sender_branch = tx.db.get_branch_id(),
-                    receiver_branch = receiver_branch,
-                    sender_method = sender_method,
-                    receiver_method = receiver_method,
-                    value = value,
-                    timestamp = datetime.datetime.now(),
-                    status = 'active')
+        if sender_amount < value:
+            raise ControlError(
+                    'The account %d does not have the money to transact'
+                    % sender.id, 400)
 
+        # populate transaction model
+        t = tx.model.Transaction(
+                sender_id = sender.id,
+                receiver_id = receiver_id,
+                sender_branch = tx.db.get_branch_id(),
+                receiver_branch = receiver_branch,
+                sender_method = sender_method,
+                receiver_method = receiver_method,
+                value = value,
+                timestamp = datetime.datetime.now(),
+                status = 'active')
+
+        try:
             acid_session.add(t)
             acid_session.commit()
 
@@ -204,15 +210,22 @@ def coordinate_twophase_transaction(
                     tx.db.port_to_ip[branch_port],
                     branch_port,
                     timeout=300)
-            connection.request('POST', '/twophase', json.dumps(t.__json__()))
-            response = connection.getresponse()
-            status = response.status
-            data = response.read()
-            print('data: ', data)
+
+            try:
+                connection.request('POST', '/twophase', json.dumps(t.__json__()))
+                response = connection.getresponse()
+                status = response.status
+                data = response.read()
+            except:
+                t.status = 'aborted'
+                acid_session.commit()
+                raise ControlError(
+                        'Error on connecting the server of branch %d' % receiver_branch,
+                        500)
 
             # checking the response
             if status < 200 or status >= 300:
-                jerror = json.loads(data)
+                t.status = 'aborted'
                 if ( 'type' in jerror and
                         jerror['type'] == 'error' and
                         'msg' in jerror ):
@@ -222,26 +235,39 @@ def coordinate_twophase_transaction(
                             'Error with the branch %d system' % branchid,
                             status)
 
-            transaction_response = tx.model.Transaction()
-            if not transaction_response.__from_json__(data):
-                raise ControlError(
-                        'Bad json from branch response', 500)
+            try:
+                transaction_response = tx.model.Transaction()
+                if not transaction_response.__from_json__(data):
+                    raise ControlError(
+                            'Bad json from branch response from branch id %d'
+                            % branchid, 500)
 
-            # set phase
-            t.status = 'provisory'
+                # change status
+                t.participant_tx = transaction_response.participant_tx
+                t.status = 'provisory'
+                acid_session.commit()
+
+                setattr(sender, sender_method, sender_amount - value)
+                session.commit()
+
+                # set phase
+                t.status = 'committed'
+                acid_session.commit()
+            except:
+                connection.request('DELETE', '/twophase/%d', transaction_response.participant_tx)
+                raise
+
+            connection.request('PUT', '/twophase/%d' % t.participant_tx)
+
+        except socket.timeout:
+            t.status = 'aborted'
             acid_session.commit()
-
-            setattr(sender, sender_method, sender_amount - value)
-            session.commit()
-
-            # set phase
-            t.status = 'committed'
+            raise ControlError(
+                    'The branch %d system is unresponsive' % branchid, 500)
+        except:
+            t.status = 'aborted'
             acid_session.commit()
-
-            connection.request('PUT', '/twophase/%d' % receiver_branch)
-    except socket.timeout:
-        raise ControlError(
-                'The branch %d system is unresponsive' % branchid, 500)
+            raise
 
 ## Realize a transaction from `sender` to `receiver` of value `value`
  # from the coordinator perspective
@@ -332,6 +358,7 @@ def first_phase(transaction):
 
     return t
 
+## second phase from the participant perspective
 def second_phase(id):
     transaction = tx.control.get_transaction(id)
 
