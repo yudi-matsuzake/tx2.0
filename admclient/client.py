@@ -6,6 +6,8 @@ import http.client
 import json
 from threading import *
 
+
+# Dictionary to translate combo box to ports
 bankToPort = {
 		'Banco do Brasil' : [8080, 8081],
 		'Caixa' : [8082],
@@ -16,6 +18,7 @@ bankToPort = {
 def close():
 	top.destroy()
 
+## Function to request the amount using Web Service
 def connection(port, method):
 	con = http.client.HTTPConnection(host="localhost", port=port)
 	con.request(method, "/total_amount")
@@ -24,11 +27,12 @@ def connection(port, method):
 	con.close()
 	return data
 
+## Function to converst json into the value
 def amountFromJson(data):
 	r = json.loads(data)
 	return float(r["total_amount"])
 
-
+# Main view Class
 class AdmClient():
 
 	def __init__(self, top):
@@ -72,11 +76,13 @@ class AdmClient():
 		self.textBank.grid(row=1, column=1)
 		self.textBank.config(state="readonly")
 
+	#Function to get the branch value
 	def atualizeTextBranch(self):
 		self.branchAmount.set(str(amountFromJson(connection(self.port, "GET"))))
 		self.textBranch.config(state="readonly")
 
-
+	
+	#Function to add the amount of each branch
 	def addBankAmount(self, port, method):
 		self.lock = Lock()
 		with self.lock:
@@ -87,16 +93,19 @@ class AdmClient():
 		self.total = 0
 
 		ts = []
+		
+		#Start all threads
 		for p in ports:
 			ts.append(Thread(target=self.addBankAmount(p, "GET")))
 
 		for t in ts:
 			t.start()
 
+		#Joins the threads waiting for all responses
 		for t in ts:
 			t.join()					
 
-
+		#Atualize value
 		self.bankAmount.set(str(self.total))
 
 top = Tk()
