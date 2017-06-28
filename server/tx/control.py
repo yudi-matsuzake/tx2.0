@@ -133,6 +133,145 @@ def deposit(account, value, method):
             raise ControlError(
                     'The deposit method must be saving or current', 400)
 
+def abort_transaction(id):
+    t = get_transaction(id)
+    t.status = 'aborted'
+    acid_session.commit()
+
+## first phase of the participant
+def participant_first_phase(transaction):
+    receiver = get_account(transaction.receiver_id)
+
+    if receiver == None:
+        raise ControlError(
+                'There is no account with id %d' % transaction.receiver_id, 400)
+
+    receiver.lock.acquire()
+
+    print('value: ', transaction.value)
+    # add the transaction
+    t = tx.model.Transaction(
+            sender_id = transaction.sender_id,
+            receiver_id = transaction.receiver_id,
+            cordinator_tx = transaction.cordinator_tx,
+            sender_branch = transaction.sender_branch,
+            receiver_branch = transaction.receiver_branch,
+            sender_method = transaction.sender_method,
+            receiver_method = transaction.receiver_method,
+            value = transaction.value,
+            timestamp = transaction.timestamp,
+            status = 'provisory')
+
+    acid_session.add(t)
+    acid_session.commit()
+
+    t.participant_tx = t.id
+    acid_session.commit()
+
+    return t
+
+## second phase from the participant perspective
+def participant_second_phase(id):
+    transaction = tx.control.get_transaction(id)
+
+    if transaction == None:
+        raise ControlError(
+                'There is no transaction with id %d' % id, 400)
+
+    receiver = get_account(transaction.receiver_id)
+    currvalue = getattr(receiver, transaction.receiver_method)
+    setattr(receiver, transaction.receiver_method, currvalue + transaction.value)
+    session.commit()
+
+    transaction.status = 'committed'
+    acid_session.commit()
+
+    if not receiver.lock.acquire(blocking=False):
+        receiver.lock.release()
+
+## two phase transaction
+def coordinate_twophase_transaction(transaction, sender):
+
+    with sender.lock:
+
+        # verify if the sender was the amount
+        sender_amount = getattr(sender, transaction.sender_method)
+
+        if sender_amount < transaction.value:
+            raise ControlError(
+                    'The account %d does not have the money to transact'
+                    % sender.id, 400)
+
+        try:
+
+            branch_port = 8080 + transaction.receiver_branch
+
+            # FIRST PHASE
+            # send the message to the another branch
+            connection = http.client.HTTPConnection(
+                    tx.db.port_to_ip[branch_port],
+                    branch_port,
+                    timeout=10)
+
+            try:
+                connection.request('POST', '/twophase', json.dumps(transaction.__json__()))
+                response = connection.getresponse()
+                status = response.status
+                data = response.read()
+
+            except:
+                raise ControlError(
+                        'Error on connecting the server of branch %d'
+                        % transaction.receiver_branch, 500)
+
+            # checking the response
+            if status < 200 or status >= 300:
+                transaction.status = 'aborted'
+                if ( 'type' in jerror and
+                        jerror['type'] == 'error' and
+                        'msg' in jerror ):
+                    raise ControlError(jerror['msg'], status)
+                else:
+                    raise ControlError(
+                            'Error with the branch %d system' % branchid,
+                            status)
+
+            try:
+                transaction_response = tx.model.Transaction()
+                if not transaction_response.__from_json__(data):
+                    raise ControlError(
+                            'Bad json from branch response from branch id %d'
+                            % branchid, 500)
+
+                # change status
+                transaction.participant_tx = transaction_response.participant_tx
+                transaction.status = 'provisory'
+                acid_session.commit()
+
+                setattr(sender,
+                        transaction.sender_method,
+                        sender_amount - transaction.value)
+                session.commit()
+
+                # set phase
+                transaction.status = 'committed'
+                acid_session.commit()
+            except:
+                connection.request('DELETE', '/twophase/%d' % transaction_response.participant_tx)
+                raise
+
+            connection.request('PUT', '/twophase/%d' % transaction.participant_tx)
+
+        except socket.timeout:
+            transaction.status = 'aborted'
+            acid_session.commit()
+            raise ControlError(
+                    'The branch %d system is unresponsive' % branchid, 500)
+        except:
+            transaction.status = 'aborted'
+            acid_session.commit()
+            raise
+
 ## Transaction to the same branch
  #
 def same_branch_transaction(sender, receiver, sender_method, receiver_method, value):
@@ -159,115 +298,6 @@ def same_branch_transaction(sender, receiver, sender_method, receiver_method, va
 
     sender.lock.release()
     receiver.lock.release()
-
-def abort_transaction(id):
-    t = get_transaction(id)
-    t.status = 'aborted'
-    acid_session.commit()
-
-## two phase transaction
-def coordinate_twophase_transaction(
-        sender,
-        receiver_id,
-        sender_method,
-        receiver_method,
-        receiver_branch,
-        value):
-
-    with sender.lock:
-        sender_amount = getattr(sender, sender_method)
-
-        if sender_amount < value:
-            raise ControlError(
-                    'The account %d does not have the money to transact'
-                    % sender.id, 400)
-
-        # populate transaction model
-        t = tx.model.Transaction(
-                sender_id = sender.id,
-                receiver_id = receiver_id,
-                sender_branch = tx.db.get_branch_id(),
-                receiver_branch = receiver_branch,
-                sender_method = sender_method,
-                receiver_method = receiver_method,
-                value = value,
-                timestamp = datetime.datetime.now(),
-                status = 'active')
-
-        try:
-            acid_session.add(t)
-            acid_session.commit()
-
-            # update the cordinator id
-            t.cordinator_tx = t.id
-            acid_session.commit()
-
-            branch_port = 8080 + receiver_branch
-
-            # FIRST PHASE
-            # send the message to the another branch
-            connection = http.client.HTTPConnection(
-                    tx.db.port_to_ip[branch_port],
-                    branch_port,
-                    timeout=300)
-
-            try:
-                connection.request('POST', '/twophase', json.dumps(t.__json__()))
-                response = connection.getresponse()
-                status = response.status
-                data = response.read()
-            except:
-                t.status = 'aborted'
-                acid_session.commit()
-                raise ControlError(
-                        'Error on connecting the server of branch %d' % receiver_branch,
-                        500)
-
-            # checking the response
-            if status < 200 or status >= 300:
-                t.status = 'aborted'
-                if ( 'type' in jerror and
-                        jerror['type'] == 'error' and
-                        'msg' in jerror ):
-                    raise ControlError(jerror['msg'], status)
-                else:
-                    raise ControlError(
-                            'Error with the branch %d system' % branchid,
-                            status)
-
-            try:
-                transaction_response = tx.model.Transaction()
-                if not transaction_response.__from_json__(data):
-                    raise ControlError(
-                            'Bad json from branch response from branch id %d'
-                            % branchid, 500)
-
-                # change status
-                t.participant_tx = transaction_response.participant_tx
-                t.status = 'provisory'
-                acid_session.commit()
-
-                setattr(sender, sender_method, sender_amount - value)
-                session.commit()
-
-                # set phase
-                t.status = 'committed'
-                acid_session.commit()
-            except:
-                connection.request('DELETE', '/twophase/%d', transaction_response.participant_tx)
-                raise
-
-            connection.request('PUT', '/twophase/%d' % t.participant_tx)
-
-        except socket.timeout:
-            t.status = 'aborted'
-            acid_session.commit()
-            raise ControlError(
-                    'The branch %d system is unresponsive' % branchid, 500)
-        except:
-            t.status = 'aborted'
-            acid_session.commit()
-            raise
 
 ## Realize a transaction from `sender` to `receiver` of value `value`
  # from the coordinator perspective
@@ -317,61 +347,101 @@ def transaction(
                 value)
 
     else:
+        # populate transaction model
+        transaction = tx.model.Transaction(
+                sender_id = sender.id,
+                receiver_id = receiver_id,
+                sender_branch = tx.db.get_branch_id(),
+                receiver_branch = receiver_branch,
+                sender_method = sender_method,
+                receiver_method = receiver_method,
+                value = value,
+                timestamp = datetime.datetime.now(),
+                status = 'active')
 
-        coordinate_twophase_transaction(
-                sender,
-                receiver_id,
-                sender_method,
-                receiver_method,
-                receiver_branch,
-                value)
+        # add transaction into bd
+        acid_session.add(transaction)
+        acid_session.commit()
 
-## first phase of the participant
-def first_phase(transaction):
-    receiver = get_account(transaction.receiver_id)
+        # update the cordinator id
+        transaction.cordinator_tx = transaction.id
+        acid_session.commit()
 
-    if receiver == None:
-        raise ControlError(
-                'There is no account with id %d' % transaction.receiver_id, 400)
+        coordinate_twophase_transaction(transaction, sender)
 
-    receiver.lock.acquire()
+## Restore the state of the transactions
+def restore():
 
-    print('value: ', transaction.value)
-    # add the transaction
-    t = tx.model.Transaction(
-            sender_id = transaction.sender_id,
-            receiver_id = transaction.receiver_id,
-            cordinator_tx = transaction.cordinator_tx,
-            sender_branch = transaction.sender_branch,
-            receiver_branch = transaction.receiver_branch,
-            sender_method = transaction.sender_method,
-            receiver_method = transaction.receiver_method,
-            value = transaction.value,
-            timestamp = transaction.timestamp,
-            status = 'provisory')
+    acid_session = tx.db.acid_newsession()
 
-    acid_session.add(t)
-    acid_session.commit()
+    # restore the active transactions
+    active_transactions = acid_session.query(tx.model.Transaction)\
+        .filter(tx.model.Transaction.status == 'active')\
+        .filter(tx.model.Transaction.sender_branch == tx.db.get_branch_id())\
+        .all()
 
-    t.participant_tx = t.id
-    acid_session.commit()
+    for transaction in active_transactions:
+        sender = get_account(transaction.sender_id)
+        if sender != None:
+            try:
+                coordinate_twophase_transaction(transaction, sender)
+            except:
+                pass
 
-    return t
+    # restore provisory transactions who i coordinate
+    provisory_transactions = acid_session.query(tx.model.Transaction)\
+        .filter(tx.model.Transaction.status == 'provisory')\
+        .filter(tx.model.Transaction.sender_branch == tx.db.get_branch_id())\
+        .all()
 
-## second phase from the participant perspective
-def second_phase(id):
-    transaction = tx.control.get_transaction(id)
+    for transaction in provisory_transactions:
+        sender = get_account(transaction.sender_id)
+        if sender != None:
+            try:
+                setattr(sender,
+                        transaction.sender_method,
+                        sender_amount - transaction.value)
+                session.commit()
 
-    if transaction == None:
-        raise ControlError(
-                'There is no transaction with id %d' % id, 400)
+                # set phase
+                transaction.status = 'committed'
+                acid_session.commit()
 
-    receiver = get_account(transaction.receiver_id)
-    currvalue = getattr(receiver, transaction.receiver_method)
-    setattr(receiver, transaction.receiver_method, currvalue + transaction.value)
-    session.commit()
+                branch_port = 8080 + transaction.receiver_branch
+                connection = http.client.HTTPConnection(
+                        tx.db.port_to_ip[branch_port],
+                        branch_port,
+                        timeout=10)
+                connection.request('PUT', '/twophase/%d' % transaction.participant_tx)
+            except:
+                transaction.status = 'aborted'
+                acid_session.commit()
 
-    transaction.status = 'committed'
-    acid_session.commit()
+    # restore provisory transactions who i participate
+    provisory_transactions = acid_session.query(tx.model.Transaction)\
+        .filter(tx.model.Transaction.status == 'provisory')\
+        .filter(tx.model.Transaction.receiver_branch == tx.db.get_branch_id())\
+        .all()
 
-    receiver.lock.release()
+    for transaction in provisory_transactions:
+        sender = get_account(transaction.sender_id)
+        if sender != None:
+            branch_port = 8080 + transaction.sender_branch
+            connection = http.client.HTTPConnection(
+                    tx.db.port_to_ip[branch_port],
+                    branch_port,
+                    timeout=10)
+            connection.request('GET', '/twophase/%d' % transaction.cordinator_tx)
+            response = connection.getresponse()
+            data = response.read()
+
+            cordinator_trasaction = tx.model.Transaction()
+            if cordinator_trasaction.__from_json__(data):
+                print(cordinator_trasaction.status)
+                if cordinator_trasaction.status == 'committed':
+                    participant_second_phase(transaction.id)
+                elif cordinator_trasaction.status == 'aborted':
+                    transaction.status = 'aborted'
+                    acid_session.commit()
+
+    acid_session.close()

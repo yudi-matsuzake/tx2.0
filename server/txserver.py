@@ -137,7 +137,7 @@ def first_phase():
     if not transaction_request.__from_json__(flask.request.get_data()):
         flask.abort(400)
     try:
-        transaction = tx.control.first_phase(transaction_request)
+        transaction = tx.control.participant_first_phase(transaction_request)
 
         return flask.jsonify(txjson(transaction))
     except tx.control.ControlError as error:
@@ -147,7 +147,7 @@ def first_phase():
 @app.route('/twophase/<int:id>', methods=['PUT'])
 def second_phase(id):
     try:
-        tx.control.second_phase(id)
+        tx.control.participant_second_phase(id)
         return "", 200
     except tx.control.ControlError as error:
         return txerror(error.msg, error.code)
@@ -157,6 +157,15 @@ def second_phase(id):
 def abort_transaction(id):
     try:
         tx.control.abort_transaction(id)
+    except tx.control.ControlError as error:
+        return txerror(error.msg, error.code)
+
+# get transactions status
+@app.route('/twophase/<int:id>', methods=['GET'])
+def get_transaction(id):
+    try:
+        transaction = tx.control.get_transaction(id)
+        return flask.jsonify(txjson(transaction))
     except tx.control.ControlError as error:
         return txerror(error.msg, error.code)
 
@@ -203,5 +212,5 @@ def transaction():
         return txerror(error.msg, error.code)
 
 if __name__ == '__main__':
-    print('port: ', tx.db.port)
+    tx.control.restore()
     app.run(debug=True, threaded=True, port=tx.db.port)

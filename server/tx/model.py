@@ -87,7 +87,8 @@ class Transaction(db.acid):
             'receiver_branch' : self.receiver_branch,
             'receiver_method' : self.receiver_method,
             'timestamp'       : time.mktime(self.timestamp.timetuple()),
-            'value'           : self.value
+            'value'           : self.value,
+            'status'          : self.status
         }
 
     def __from_json__(self, data):
@@ -104,7 +105,8 @@ class Transaction(db.acid):
                  'receiver_branch',
                  'receiver_method',
                  'timestamp',
-                 'value']
+                 'value',
+                 'status']
 
         for k in keys:
             if k not in j:
